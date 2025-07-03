@@ -7,6 +7,7 @@
 
 #define PORT "/dev/ttyAMA0"
 #define DELAY_SEC 10
+#define MARKER_BYTE 0x7E
 
 int main() {
     int fd = open(PORT, O_WRONLY | O_NOCTTY);
@@ -28,17 +29,16 @@ int main() {
 
     unsigned char frame_seq = 0;
     while (1) {
-        unsigned char buffer[6];
-        buffer[0] = frame_seq;
-
+        unsigned char buffer[7];
+        buffer[0] = 0x7E;  // 마커
+        buffer[1] = frame_seq;       // 시퀀스 번호
         // payload: 0xA1, 0xB2, 0xC3, 0xD4, 0xE5 (예시)
-        buffer[1] = 0xA1;
-        buffer[2] = 0xB2;
-        buffer[3] = 0xC3;
-        buffer[4] = 0xD4;
-        buffer[5] = 0xE5;
-
-        write(fd, buffer, 6);
+        buffer[2] = 0xA1;
+        buffer[3] = 0xB2;
+        buffer[4] = 0xC3;
+        buffer[5] = 0xD4;
+        buffer[6] = 0xE5;
+        write(fd, buffer, 7);
 
         printf("Sent frame_seq: 0x%02X | Payload: ", frame_seq);
         for (int i = 1; i < 6; i++) {

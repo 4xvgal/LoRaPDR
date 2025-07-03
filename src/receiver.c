@@ -6,15 +6,14 @@
 
 #define PORT "/dev/ttyAMA0"
 #define BUF_SIZE 64      // 한 번에 읽을 최대 바이트 수
-#define FRAME_SIZE 7     // frame_seq + 5 payload + RSSI
-
+#define FRAME_SIZE 8        // 1 marker + 7 data (seq + 5 payload + rssi)
+#define MARKER_BYTE 0x7E    // 프레임 시작 마커
 int main() {
     int fd = open(PORT, O_RDONLY | O_NOCTTY);
     if (fd < 0) {
         perror("open");
         return 1;
     }
-
     struct termios tty;
     tcgetattr(fd, &tty);
     cfsetospeed(&tty, B9600);
@@ -26,39 +25,39 @@ int main() {
     tty.c_cflag &= ~CSTOPB;
     tcsetattr(fd, TCSANOW, &tty);
 
-    unsigned char buf[BUF_SIZE];
-
-    printf("Listening on %s... Press Ctrl+C to exit.\n", PORT);
+    unsigned char byte;
+    unsigned char frame[FRAME_SIZE];
+    int pos = 0;
+    int syncing = 0;
+    rintf("🔍 Listening on %s (marker: 0x%02X)...\n", PORT, MARKER_BYTE);
 
     while (1) {
-        int n = read(fd, buf, BUF_SIZE);
-        if (n > 0) {
-            printf("Received %d bytes\n", n);
+        int n = read(fd, &byte, 1);  // 1바이트씩 읽기
+        if (n <= 0) continue;
 
-            // 7바이트씩 프레임 파싱
-            for (int i = 0; i + FRAME_SIZE - 1 < n; i += FRAME_SIZE) {
-                unsigned char seq = buf[i];
-                unsigned char rssi = buf[i + FRAME_SIZE - 1];
-
-                printf("  Frame: seq=0x%02X | payload=", seq);
-                for (int j = 1; j < FRAME_SIZE - 1; j++) {
-                    printf("0x%02X ", buf[i + j]);
-                }
-                printf("| RSSI: -%d dBm\n", rssi);
+        if (!syncing) {
+            if (byte == MARKER_BYTE) {
+                frame[0] = byte;
+                pos = 1;
+                syncing = 1;
             }
+        } else {
+            frame[pos++] = byte;
+            if (pos == FRAME_SIZE) {
+                // 완전한 프레임 수신됨
+                unsigned char seq = frame[1];
+                unsigned char rssi = frame[7];
 
-            // 남은 바이트 경고 출력 (패킷 중간 잘림 가능성)
-            int leftover = n % FRAME_SIZE;
-            if (leftover != 0) {
-                printf(" Warning: %d leftover byte(s) ignored: ", leftover);
-                for (int i = n - leftover; i < n; i++) {
-                    printf("0x%02X ", buf[i]);
-                }
-                printf("\n");
+                printf("  ✅ Frame: seq=0x%02X | payload=", seq);
+                for (int i = 2; i < 7; i++)
+                    printf("0x%02X ", frame[i]);
+                printf("| RSSI: -%d dBm\n", rssi);
+
+                // 다음 프레임 대기
+                syncing = 0;
+                pos = 0;
             }
         }
-
-        usleep(10000); // 10ms 대기
     }
 
     close(fd);
