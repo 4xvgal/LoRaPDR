@@ -1,14 +1,11 @@
-// receiver.c - 16진수 출력 및 PDR 계산 포함
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <termios.h>
-#include <string.h>
 
 #define PORT "/dev/ttyAMA0"
-#define MAX_SEQ 256
-#define FRAME_SIZE 6
+#define BUF_SIZE 64  // 한 번에 읽을 최대 바이트 수
 
 int main() {
     int fd = open(PORT, O_RDONLY | O_NOCTTY);
@@ -28,36 +25,20 @@ int main() {
     tty.c_cflag &= ~CSTOPB;
     tcsetattr(fd, TCSANOW, &tty);
 
-    unsigned char seen[MAX_SEQ] = {0};
-    int total_received = 0;
-    int unique_received = 0;
+    unsigned char buf[BUF_SIZE];
+
+    printf("🔍 Listening on %s... Press Ctrl+C to exit.\n", PORT);
 
     while (1) {
-        unsigned char buffer[FRAME_SIZE];
-        int n = read(fd, buffer, FRAME_SIZE);
-        if (n == FRAME_SIZE) {
-            unsigned char seq = buffer[0];
-
-            if (!seen[seq]) {
-                seen[seq] = 1;
-                unique_received++;
+        int n = read(fd, buf, BUF_SIZE);
+        if (n > 0) {
+            printf("Received %d bytes: ", n);
+            for (int i = 0; i < n; ++i) {
+                printf("0x%02X ", buf[i]);
             }
-            total_received++;
-
-            // 가장 높은 seq 기준 PDR 계산
-            int max_seq = 0;
-            for (int i = 0; i < MAX_SEQ; ++i)
-                if (seen[i]) max_seq = i;
-
-            float pdr = (float)unique_received / (max_seq + 1) * 100;
-
-            printf("Received frame_seq: 0x%02X | Payload: ", seq);
-            for (int i = 1; i < FRAME_SIZE; i++) {
-                printf("0x%02X ", buffer[i]);
-            }
-            printf("| Unique: %d | Total: %d | PDR: %.2f%%\n",
-                   unique_received, total_received, pdr);
+            printf("\n");
         }
+        usleep(10000); // 10ms 쉬어줌 (optional)
     }
 
     close(fd);
