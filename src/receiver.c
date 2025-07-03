@@ -5,15 +5,16 @@
 #include <termios.h>
 
 #define PORT "/dev/ttyAMA0"
-#define BUF_SIZE 64      // 한 번에 읽을 최대 바이트 수
 #define FRAME_SIZE 8        // 1 marker + 7 data (seq + 5 payload + rssi)
 #define MARKER_BYTE 0x7E    // 프레임 시작 마커
+
 int main() {
     int fd = open(PORT, O_RDONLY | O_NOCTTY);
     if (fd < 0) {
         perror("open");
         return 1;
     }
+
     struct termios tty;
     tcgetattr(fd, &tty);
     cfsetospeed(&tty, B9600);
@@ -29,7 +30,8 @@ int main() {
     unsigned char frame[FRAME_SIZE];
     int pos = 0;
     int syncing = 0;
-    rintf("🔍 Listening on %s (marker: 0x%02X)...\n", PORT, MARKER_BYTE);
+
+    printf("🔍 Listening on %s (marker: 0x%02X)...\n", PORT, MARKER_BYTE);
 
     while (1) {
         int n = read(fd, &byte, 1);  // 1바이트씩 읽기
