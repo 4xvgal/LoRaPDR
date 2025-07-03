@@ -8,7 +8,7 @@
 
 #define PORT "/dev/ttyAMA0"
 #define PAYLOAD "DUMMY"
-#define DELAY_SEC 1
+#define DELAY_SEC 6
 
 int main() {
     int fd = open(PORT, O_WRONLY | O_NOCTTY);
