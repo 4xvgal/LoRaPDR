@@ -1,13 +1,11 @@
-// sender.c
+// sender.c - 실제 바이트 (16진수 값) 전송 버전
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <termios.h>
 
 #define PORT "/dev/ttyAMA0"
-#define PAYLOAD "DUMMY"
 #define DELAY_SEC 10
 
 int main() {
@@ -30,11 +28,24 @@ int main() {
 
     unsigned char frame_seq = 0;
     while (1) {
-        char buffer[6];
+        unsigned char buffer[6];
         buffer[0] = frame_seq;
-        memcpy(&buffer[1], PAYLOAD, 5);
+
+        // payload: 0xA1, 0xB2, 0xC3, 0xD4, 0xE5 (예시)
+        buffer[1] = 0xA1;
+        buffer[2] = 0xB2;
+        buffer[3] = 0xC3;
+        buffer[4] = 0xD4;
+        buffer[5] = 0xE5;
+
         write(fd, buffer, 6);
-        printf("Sent frame_seq: %d\n", frame_seq);
+
+        printf("Sent frame_seq: 0x%02X | Payload: ", frame_seq);
+        for (int i = 1; i < 6; i++) {
+            printf("0x%02X ", buffer[i]);
+        }
+        printf("\n");
+
         frame_seq++;
         usleep(DELAY_SEC * 1000000);
     }
