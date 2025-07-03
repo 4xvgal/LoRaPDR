@@ -1,4 +1,4 @@
-// receiver.c
+// receiver.c - 16진수 출력 및 PDR 계산 포함
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -8,6 +8,7 @@
 
 #define PORT "/dev/ttyAMA0"
 #define MAX_SEQ 256
+#define FRAME_SIZE 6
 
 int main() {
     int fd = open(PORT, O_RDONLY | O_NOCTTY);
@@ -32,24 +33,30 @@ int main() {
     int unique_received = 0;
 
     while (1) {
-        unsigned char buffer[6];
-        int n = read(fd, buffer, 6);
-        if (n == 6) {
+        unsigned char buffer[FRAME_SIZE];
+        int n = read(fd, buffer, FRAME_SIZE);
+        if (n == FRAME_SIZE) {
             unsigned char seq = buffer[0];
+
             if (!seen[seq]) {
                 seen[seq] = 1;
                 unique_received++;
             }
             total_received++;
 
-            // 가장 높은 frame_seq 기준으로 PDR 계산
+            // 가장 높은 seq 기준 PDR 계산
             int max_seq = 0;
             for (int i = 0; i < MAX_SEQ; ++i)
                 if (seen[i]) max_seq = i;
 
             float pdr = (float)unique_received / (max_seq + 1) * 100;
-            printf("Received seq: %d | Unique: %d | Total: %d | PDR: %.2f%%\n",
-                   seq, unique_received, total_received, pdr);
+
+            printf("Received frame_seq: 0x%02X | Payload: ", seq);
+            for (int i = 1; i < FRAME_SIZE; i++) {
+                printf("0x%02X ", buffer[i]);
+            }
+            printf("| Unique: %d | Total: %d | PDR: %.2f%%\n",
+                   unique_received, total_received, pdr);
         }
     }
 
