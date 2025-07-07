@@ -8,13 +8,13 @@
 
 #define PORT "/dev/ttyAMA0"
 #define DELAY_SEC 5
-#define PAYLOAD_SIZE 5
-// #define TX_FRAME_SIZE 42    // 전송할 프레임 크기: 마커(1) + 시퀀스(1) + 페이로드(5)
+#define PAYLOAD_SIZE 26
+
 #define MARKER_BYTE 0x7E
 
 
 int main() {
-    int TX_FRAME_SIZE = PAYLOAD_SIZE + 2;
+    int TX_FRAME_SIZE = PAYLOAD_SIZE + 2; //보내는 프레임 사이즈는 마커 (1) + 시퀀스(1) + 페이로드
 
     int fd = open(PORT, O_WRONLY | O_NOCTTY);
     if (fd < 0) {

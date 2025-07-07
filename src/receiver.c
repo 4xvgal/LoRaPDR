@@ -7,7 +7,7 @@
 #include <string.h>
 
 #define PORT "/dev/ttyAMA0"
-#define RX_FRAME_SIZE 8// 수신할 프레임 크기: 마커(1) + 시퀀스(1) + 페이로드(5) + RSSI(1)
+#define RX_FRAME_SIZE 29// 수신할 프레임 크기: 마커(1) + 시퀀스(1) + 페이로드(5) + RSSI(1)
 #define MARKER_BYTE 0x7E
 
 int main() {
@@ -50,7 +50,11 @@ int main() {
     int pos = 0;
     int in_sync = 0;
 
-    printf("🔍 Listening on %s (expecting %d-byte frames with RSSI)...\n", PORT, RX_FRAME_SIZE);
+    //PDR variables
+    unsigned long long recieved_count =0; // 수신한 총 패킷 수
+    unsigned char max_sequence = 0; //수신한 최고 시퀀스 번호
+
+    printf("🔍 Listening on %s (expecting %d-byte frames with RSSI)...\n", PORT, RX_FRAME_SIZE-1);
 
     while (1) {
         int n = read(fd, &byte, 1);
@@ -71,14 +75,24 @@ int main() {
             if (pos >= RX_FRAME_SIZE) {
                 unsigned char seq = frame_buffer[1];
                 unsigned char rssi = frame_buffer[RX_FRAME_SIZE-1];
+                // PDR calc logic
+                recieved_count++;
+                if(seq > max_sequence){
+                    max_sequence = seq; // 최고 시퀀스 번호 업데이트
+                }
+                double pdr = 0.0;
+                if(max_sequence > 0 || recieved_count > 0){
+                    pdr = ((double)recieved_count  / (max_sequence + 1)) * 100.0;
+                }
 
                 printf(" <- Recv'd Frame: ");
                 printf("Marker(0x%02X) Seq(0x%02X) Payload(", frame_buffer[0], seq);
                 for (int i = 2; i < RX_FRAME_SIZE - 1; i++) {
                     printf("0x%02X ", frame_buffer[i]);
                 }
+                //rssi & pdr
                 printf(") RSSI(0x%02X -> -%d dBm)\n", rssi, 256 - rssi );
-
+                printf(" | PDR %.2f%%  (%llu/%u \n )", pdr, recieved_count, max_sequence+1);
                 in_sync = 0;
                 pos = 0;
             }
