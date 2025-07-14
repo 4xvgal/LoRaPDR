@@ -1,4 +1,4 @@
-// sender.c - RSSI 없이 순수 데이터(7바이트)만 전송하는 버전
+// sender.c - 가변 페이로드 크기 전송 버전
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -8,13 +8,23 @@
 
 #define PORT "/dev/ttyAMA0"
 #define DELAY_SEC 5
-#define PAYLOAD_SIZE 26
-
 #define MARKER_BYTE 0x7E
+#define MAX_PAYLOAD_SIZE 250 // 버퍼 오버플로우 방지를 위한 최대 페이로드 크기 제한
 
+int main(int argc, char *argv[]) {
+    // 1. 명령줄 인수 파싱
+    if (argc != 3 || strcmp(argv[1], "-payload") != 0) {
+        fprintf(stderr, "Usage: %s -payload <size>\n", argv[0]);
+        return 1;
+    }
 
-int main() {
-    int TX_FRAME_SIZE = PAYLOAD_SIZE + 2; //보내는 프레임 사이즈는 마커 (1) + 시퀀스(1) + 페이로드
+    int payload_size = atoi(argv[2]);
+    if (payload_size <= 0 || payload_size > MAX_PAYLOAD_SIZE) {
+        fprintf(stderr, "Error: Payload size must be between 1 and %d.\n", MAX_PAYLOAD_SIZE);
+        return 1;
+    }
+
+    const int TX_FRAME_SIZE = payload_size + 2; // 전송할 프레임 크기: 마커(1) + 시퀀스(1) + 페이로드(N)
 
     int fd = open(PORT, O_WRONLY | O_NOCTTY);
     if (fd < 0) {
@@ -38,37 +48,33 @@ int main() {
     tty.c_cflag |= CS8;
     tty.c_cflag &= ~PARENB;
     tty.c_cflag &= ~CSTOPB;
-    tty.c_cflag &= ~CRTSCTS; // 하드웨어 흐름 제어 비활성화
+    tty.c_cflag &= ~CRTSCTS;
     tty.c_lflag &= ~(ICANON | ECHO | ECHOE | ISIG);
     tty.c_oflag &= ~OPOST;
 
     tcsetattr(fd, TCSANOW, &tty);
 
     unsigned char frame_seq = 0;
-    printf("🚀 Starting sender on %s (sending %d-byte frames)...\n", PORT, TX_FRAME_SIZE);
+    printf("🚀 Starting sender on %s (sending %d-byte payload, total frame %d bytes)...\n",
+           PORT, payload_size, TX_FRAME_SIZE);
 
     while (1) {
-        unsigned char buffer[TX_FRAME_SIZE];
+        unsigned char buffer[TX_FRAME_SIZE]; // VLA(Variable-Length Array) 사용
         buffer[0] = MARKER_BYTE;    // 마커
         buffer[1] = frame_seq;      // 시퀀스 번호
-        // 페이로드: 0xA1, 0xB2, 0xC3, 0xD4, 0xE5
-        // buffer[2] = 0xA1;
-        // buffer[3] = 0xB2;
-        // buffer[4] = 0xC3;
-        // buffer[5] = 0xD4;
-        // buffer[6] = 0xE5;
-        int j = 0;
-        for(int i=2; i< PAYLOAD_SIZE+2;i++){     
-            buffer[i] = j++;
-            
+
+        // 페이로드 채우기
+        for (int i = 0; i < payload_size; i++) {
+            buffer[i + 2] = (unsigned char)i; // 0, 1, 2, ...
         }
+
         ssize_t bytes_written = write(fd, buffer, TX_FRAME_SIZE);
         if (bytes_written < 0) {
             perror("write failed");
         } else {
             printf(" -> Sent Frame (size: %ld): ", bytes_written);
-            printf("Marker(0x%02X) Seq(0x%02X) Payload(", buffer[0], buffer[1]);
-            for (int i = 2; i <TX_FRAME_SIZE; i++) {
+            printf("Marker(0x%02X) Seq(0x%02X) Payload(%d bytes: ", buffer[0], buffer[1], payload_size);
+            for (int i = 2; i < TX_FRAME_SIZE; i++) {
                 printf("0x%02X ", buffer[i]);
             }
             printf(")\n");
